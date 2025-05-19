@@ -1,48 +1,74 @@
-PKG_VER="10.1-9-esync-xinput"
-PKG_CATEGORY="Wine"
-PKG_PRETTY_NAME="Wine ($PKG_VER)"
+#!/bin/bash
+set -e
 
-BLACKLIST_ARCH=aarch64
+package="wine"
+INSTALL_DIR="${INSTALL_DIR:-$PWD/output/pkg/$package}"
+INIT_DIR="${INIT_DIR:-$PWD}"
+TOOLCHAIN_TRIPLE="${TOOLCHAIN_TRIPLE:-x86_64-linux-gnu}" # alvo x86_64 Linux
+PREFIX="$INSTALL_DIR/files/wine"
+JOBS=$(nproc)
 
-GIT_URL=https://github.com/KreitinnSoftware/wine
-GIT_COMMIT=36b176851ffce636fc052fab773fb2be8990fe5c
-HOST_BUILD_CONFIGURE_ARGS="--enable-win64 --without-x"
-HOST_BUILD_FOLDER="$INIT_DIR/workdir/$package/wine-tools"
-HOST_BUILD_MAKE="make -j $(nproc) __tooldeps__ nls/all"
-OVERRIDE_PREFIX="$(realpath $PREFIX/../wine)"
-CONFIGURE_ARGS="--enable-archs=i386,x86_64 \
-				--host=$TOOLCHAIN_TRIPLE \
-				--with-wine-tools=$INIT_DIR/workdir/$package/wine-tools \
-				--prefix=$OVERRIDE_PREFIX \
-				--without-oss \
-				--disable-winemenubuilder \
-				--disable-win16 \
-				--disable-tests \
-				--with-x \
-				--x-libraries=$PREFIX/lib \
-				--x-includes=$PREFIX/include \
-				--with-pulse \
-				--with-gstreamer \
-				--with-opengl \
-				--with-gnutls \
-				--with-mingw=gcc \
-				--with-xinput \
-				--with-xinput2 \
-    				--enable-nls \
-				--without-xshm \
-				--without-xxf86vm \
-				--without-osmesa \
-				--without-usb \
-				--without-sdl \
-				--without-cups \
-				--without-netapi \
-				--without-pcap \
-				--without-gphoto \
-				--without-v4l2 \
-				--without-pcsclite \
-				--without-wayland \
-				--without-opencl \
-				--without-dbus \
-				--without-sane \
-				--without-udev \
-				--without-capi"
+GIT_URL="https://gitlab.winehq.org/wine/wine.git"
+GIT_BRANCH="staging"
+GIT_COMMIT=""
+
+pre_build() {
+    echo "[wine] Clonando WineHQ..."
+    if [ ! -d wine_src ]; then
+        git clone --depth 1 --branch $GIT_BRANCH $GIT_URL wine_src
+    else
+        cd wine_src && git fetch && git checkout $GIT_BRANCH && git pull && cd ..
+    fi
+}
+
+build_wine() {
+    mkdir -p wine_build
+    cd wine_build
+
+    echo "[wine] Configurando WineHQ para Windroid x86_64..."
+    ../wine_src/configure \
+        --host=$TOOLCHAIN_TRIPLE \
+        --build=x86_64-linux-gnu \
+        --prefix=$PREFIX \
+        --enable-win64 \
+        --disable-tests \
+        --disable-win16 \
+        --enable-esync \
+        --enable-fsync \
+        --with-pulse \
+        --with-x \
+        --with-opengl \
+        --with-gstreamer \
+        --with-gnutls \
+        --with-xinput \
+        --with-xinput2 \
+        CFLAGS="-O2" \
+        CXXFLAGS="-O2"
+
+    echo "[wine] Compilando WineHQ x86_64..."
+    make -j$JOBS
+    make install
+
+    cd ..
+}
+
+post_build() {
+    echo "[wine] Corrigindo permissões para usuário u0_a273..."
+    chown -R u0_a273:u0_a273 $PREFIX
+
+    echo "[wine] Empacotando Wine em .rat..."
+
+    cd $INSTALL_DIR/files
+
+    zip -r ../winehq-x86_64-latest.rat wine
+
+    echo "[wine] Build e empacotamento finalizados com sucesso."
+}
+
+main() {
+    pre_build
+    build_wine
+    post_build
+}
+
+main "$@"
