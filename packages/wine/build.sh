@@ -1,64 +1,48 @@
-#!/bin/bash
-# Windroid package build script para WineHQ padrão
-# Arquitetura de destino: x86_64
+PKG_VER="10.1-9-esync-xinput"
+PKG_CATEGORY="Wine"
+PKG_PRETTY_NAME="Wine ($PKG_VER)"
 
-package="wine"
-version="10.1-9-esync-xinput"
-arch="x86_64"
-category="Wine"
+BLACKLIST_ARCH=aarch64
 
-GIT_URL="https://gitlab.winehq.org/wine/wine.git"
-GIT_TAG="wine-10.1"
-
-package_wine() {
-    echo "[wine] Iniciando build do WineHQ $version"
-
-    # Diretórios esperados pelo Windroid
-    BUILD_DIR="${BUILD_DIR:-$PWD/build/$package}"
-    SRC_DIR="${BUILD_DIR}/src"
-    INSTALL_DIR="${BUILD_DIR}/install/files/wine"
-    mkdir -p "$SRC_DIR" "$INSTALL_DIR"
-
-    JOBS=$(nproc)
-    export TOOLCHAIN_TRIPLE="x86_64-linux-gnu"
-
-    # Clonar WineHQ
-    if [ ! -d "$SRC_DIR/wine" ]; then
-        echo "[wine] Clonando repositório WineHQ..."
-        git clone --depth 1 --branch "$GIT_TAG" "$GIT_URL" "$SRC_DIR/wine"
-    fi
-
-    # Criar diretório de build
-    BUILD_WINE_DIR="$SRC_DIR/wine_build"
-    mkdir -p "$BUILD_WINE_DIR"
-    cd "$BUILD_WINE_DIR"
-
-    echo "[wine] Configurando build WineHQ..."
-    "$SRC_DIR/wine/configure" \
-        --host="$TOOLCHAIN_TRIPLE" \
-        --build=x86_64-linux-gnu \
-        --prefix=/system/wine \
-        --enable-win64 \
-        --disable-tests \
-        --disable-win16 \
-        --with-pulse \
-        --with-x \
-        --with-opengl \
-        --with-gstreamer \
-        --with-gnutls \
-        --with-xinput \
-        --with-xinput2 \
-        CFLAGS="-O2" \
-        CXXFLAGS="-O2"
-
-    echo "[wine] Compilando WineHQ..."
-    make -j"$JOBS"
-
-    echo "[wine] Instalando WineHQ em $INSTALL_DIR"
-    make install DESTDIR="$INSTALL_DIR"
-
-    echo "[wine] Corrigindo permissões..."
-    chown -R u0_a273:u0_a273 "$INSTALL_DIR"
-
-    echo "[wine] Build finalizado com sucesso."
-}
+GIT_URL=https://github.com/WINDROID-EMU/Windroid-Wine
+GIT_COMMIT=280dd459b10b632cf28a4d3dc27ac44ef3d5d1c0
+HOST_BUILD_CONFIGURE_ARGS="--enable-win64 --without-x"
+HOST_BUILD_FOLDER="$INIT_DIR/workdir/$package/wine-tools"
+HOST_BUILD_MAKE="make -j $(nproc) __tooldeps__ nls/all"
+OVERRIDE_PREFIX="$(realpath $PREFIX/../wine)"
+CONFIGURE_ARGS="--enable-archs=i386,x86_64 \
+				--host=$TOOLCHAIN_TRIPLE \
+				--with-wine-tools=$INIT_DIR/workdir/$package/wine-tools \
+				--prefix=$OVERRIDE_PREFIX \
+				--without-oss \
+				--disable-winemenubuilder \
+				--disable-win16 \
+				--disable-tests \
+				--with-x \
+				--x-libraries=$PREFIX/lib \
+				--x-includes=$PREFIX/include \
+				--with-pulse \
+				--with-gstreamer \
+				--with-opengl \
+				--with-gnutls \
+				--with-mingw=gcc \
+				--with-xinput \
+				--with-xinput2 \
+    				--enable-nls \
+				--without-xshm \
+				--without-xxf86vm \
+				--without-osmesa \
+				--without-usb \
+				--without-sdl \
+				--without-cups \
+				--without-netapi \
+				--without-pcap \
+				--without-gphoto \
+				--without-v4l2 \
+				--without-pcsclite \
+				--without-wayland \
+				--without-opencl \
+				--without-dbus \
+				--without-sane \
+				--without-udev \
+				--without-capi"
