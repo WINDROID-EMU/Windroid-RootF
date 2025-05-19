@@ -1,36 +1,46 @@
+#!/bin/bash
+# Windroid package build script para WineHQ padrão
+# Arquitetura de destino: x86_64
+
 package="wine"
-INSTALL_DIR="${INSTALL_DIR:-$PWD/output/pkg/$package}"
-INIT_DIR="${INIT_DIR:-$PWD}"
-TOOLCHAIN_TRIPLE="${TOOLCHAIN_TRIPLE:-aarch64-linux-android}" # ajuste conforme seu toolchain
-PREFIX="$INSTALL_DIR/files/wine"
-JOBS=$(nproc)
+version="10.1-9-esync-xinput"
+arch="x86_64"
+category="Wine"
 
 GIT_URL="https://gitlab.winehq.org/wine/wine.git"
-GIT_BRANCH="staging"    # Para última versão estável use "staging" ou "master"
-GIT_COMMIT=""
+GIT_TAG="wine-10.1"
 
-pre_build() {
-    echo "[wine] Clonando WineHQ..."
-    if [ ! -d wine_src ]; then
-        git clone --depth 1 --branch $GIT_BRANCH $GIT_URL wine_src
-    else
-        cd wine_src && git fetch && git checkout $GIT_BRANCH && git pull && cd ..
+package_wine() {
+    echo "[wine] Iniciando build do WineHQ $version"
+
+    # Diretórios esperados pelo Windroid
+    BUILD_DIR="${BUILD_DIR:-$PWD/build/$package}"
+    SRC_DIR="${BUILD_DIR}/src"
+    INSTALL_DIR="${BUILD_DIR}/install/files/wine"
+    mkdir -p "$SRC_DIR" "$INSTALL_DIR"
+
+    JOBS=$(nproc)
+    export TOOLCHAIN_TRIPLE="x86_64-linux-gnu"
+
+    # Clonar WineHQ
+    if [ ! -d "$SRC_DIR/wine" ]; then
+        echo "[wine] Clonando repositório WineHQ..."
+        git clone --depth 1 --branch "$GIT_TAG" "$GIT_URL" "$SRC_DIR/wine"
     fi
-}
 
-build_wine() {
-    mkdir -p wine_build
-    cd wine_build
+    # Criar diretório de build
+    BUILD_WINE_DIR="$SRC_DIR/wine_build"
+    mkdir -p "$BUILD_WINE_DIR"
+    cd "$BUILD_WINE_DIR"
 
-    echo "[wine] Configurando WineHQ para Windroid..."
-    ../wine_src/configure \
-        --host=$TOOLCHAIN_TRIPLE \
-        --prefix=$PREFIX \
+    echo "[wine] Configurando build WineHQ..."
+    "$SRC_DIR/wine/configure" \
+        --host="$TOOLCHAIN_TRIPLE" \
+        --build=x86_64-linux-gnu \
+        --prefix=/system/wine \
         --enable-win64 \
         --disable-tests \
         --disable-win16 \
-        --enable-esync \
-        --enable-fsync \
         --with-pulse \
         --with-x \
         --with-opengl \
@@ -38,34 +48,17 @@ build_wine() {
         --with-gnutls \
         --with-xinput \
         --with-xinput2 \
-        CFLAGS="-O2 -march=armv8-a" \
-        CXXFLAGS="-O2 -march=armv8-a"
+        CFLAGS="-O2" \
+        CXXFLAGS="-O2"
 
     echo "[wine] Compilando WineHQ..."
-    make -j$JOBS
-    make install
+    make -j"$JOBS"
 
-    cd ..
+    echo "[wine] Instalando WineHQ em $INSTALL_DIR"
+    make install DESTDIR="$INSTALL_DIR"
+
+    echo "[wine] Corrigindo permissões..."
+    chown -R u0_a273:u0_a273 "$INSTALL_DIR"
+
+    echo "[wine] Build finalizado com sucesso."
 }
-
-post_build() {
-    echo "[wine] Corrigindo permissões para usuário u0_a273..."
-    chown -R u0_a273:u0_a273 $PREFIX
-
-    echo "[wine] Empacotando Wine em .rat..."
-
-    cd $INSTALL_DIR/files
-
-    # Criar .rat com estrutura correta: files/wine/...
-    zip -r ../winehq-latest-x86_64.rat wine
-
-    echo "[wine] Build e empacotamento finalizados com sucesso."
-}
-
-main() {
-    pre_build
-    build_wine
-    post_build
-}
-
-main "$@"
